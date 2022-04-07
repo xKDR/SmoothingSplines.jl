@@ -3,8 +3,9 @@ module SmoothingSplines
 import StatsBase: fit!, fit, RegressionModel, rle, ordinalrank, mean, predict
 using Reexport
 using LinearAlgebra
+using Optim
 
-export SmoothingSpline
+export SmoothingSpline, smoothing_parameter
 
 @reexport using StatsBase
 
