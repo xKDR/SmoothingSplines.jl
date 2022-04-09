@@ -46,6 +46,51 @@ function fit(::Type{SmoothingSpline}, X::AbstractVector{T}, Y::AbstractVector{T}
     fit!(spl)
 end
 
+"""
+Applying Leave one out cross-validation if λ isn't provided and returning the SmoothingSpline model. 
+Here we applied Leave One Out cross-validation(LOOCV) manually and optimising it with Optim Package. 
+The LOO function will return training and testing indices, and smoothing_parameter will find the 
+optimize λ for the DataSet. Here calculating the absolute difference between test value and predicted value 
+and taking their mean as a score. 
+"""
+function fit(::Type{SmoothingSpline}, X::AbstractVector, Y::AbstractVector, wts::AbstractVector{T}=fill(1.0, length(Y))) where T <: LAPACKFloat
+    function LOO(n) #funtion for leave one out cross validation
+        test_inds = []
+        train_inds = []
+        for i in 1:n
+            push!(test_inds, i)
+            train_ind = vcat(1:i-1, i+1:n)
+            push!(train_inds, train_ind)
+        end
+        # returning the train indices and test indices in two array with the indices as an element
+        return (train_inds, test_inds) 
+    end
+
+    function smoothing_parameter(X, Y) #function for choosing optimize smoothing_parameter λ
+        function smoothcvloo(λ)
+            n = length(X)
+            train_inds, test_inds = LOO(n)
+            X_std = (X .- minimum(X))/(maximum(X)-minimum(X))
+            avgrss = []
+            for i in 1:n
+                xtest = X_std[test_inds[i]]
+                ytest = Y[test_inds[i]]
+                xtrain = X_std[train_inds[i]]
+                ytrain = Y[train_inds[i]]
+                spl = fit(SmoothingSpline, xtrain, ytrain, λ)
+                Ypred = predict(spl,xtest)
+                push!(avgrss, abs(ytest - Ypred))
+            end
+            return mean(avgrss)
+        end
+        res = optimize(smoothcvloo, 0.0, 1000.0) # optimizing λ
+        λ = Optim.minimizer(res)    
+        println("Parameter:", λ) #optimized λ
+        return λ
+    end
+    return fit(SmoothingSpline, X, Y, smoothing_parameter(X, Y)) #return the model with optimized parameter
+end
+
 function fit!(spl::SmoothingSpline{T}) where T<:LAPACKFloat
     Y = spl.Ydesign
     ws = spl.weights
